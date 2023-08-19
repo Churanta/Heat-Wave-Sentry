@@ -1,6 +1,7 @@
 #include <DHT.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h> // Include the ArduinoJSON library
 
 #define DHT_PIN 12 // DHT22 sensor is connected to D1 Mini pin D12
 #define DHT_TYPE DHT22
@@ -60,10 +61,16 @@ void loop() {
   // Calculate UV intensity using the sensor's formula (you may need to adjust this based on calibration)
   float uvIntensity = voltage * 15;  // Adjust the constant based on calibration data
 
-  // Format the data into a JSON message
-  String jsonMessage = "{\"temperature\":" + String(temperature) +
-                       ",\"humidity\":" + String(humidity) +
-                       ",\"uv_intensity\":" + String(uvIntensity) + "}";
+  // Create a JSON object
+  StaticJsonDocument<200> jsonDoc;
+  jsonDoc["UserId"] = "SN001"; // Add UserId field
+  jsonDoc["temperature"] = temperature;
+  jsonDoc["humidity"] = humidity;
+  jsonDoc["uv_intensity"] = uvIntensity;
+
+  // Serialize the JSON object to a string
+  String jsonMessage;
+  serializeJson(jsonDoc, jsonMessage);
 
   // Publish the JSON message to the MQTT topic
   if (client.publish(mqttTopic, jsonMessage.c_str())) {
