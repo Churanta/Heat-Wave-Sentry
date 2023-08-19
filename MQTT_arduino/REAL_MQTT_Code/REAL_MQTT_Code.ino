@@ -1,80 +1,76 @@
+#include <DHT.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <DHT.h>
 
-#define DHTPIN 12
-#define DHTTYPE DHT22
+#define DHT_PIN 12 // DHT22 sensor is connected to D1 Mini pin D12
+#define DHT_TYPE DHT22
 
-// WiFi network credentials
-const char* ssid = "Churanta";
-const char* password = "Kanasona12!";
+#define UV_SENSOR_PIN A0 // ML8511 sensor is connected to analog pin A0
 
-// MQTT broker information
-const char* mqtt_server = "broker.emqx.io";
-const int mqtt_port = 1883;
-const char* mqtt_user = "1234";
-const char* mqtt_password = "1234";
+// WiFi settings
+const char* ssid = "CM";
+const char* password = "12345678";
 
-// MQTT topic to publish data to
-const char* mqtt_topic = "testtopic/chur";
+// MQTT broker settings
+const char* mqttServer = "broker.emqx.io";
+const int mqttPort = 1883;
+const char* mqttUser = "1234";
+const char* mqttPassword = "1234";
+const char* mqttTopic = "testtopic/chur";
 
-// DHT sensor
-DHT dht(DHTPIN, DHTTYPE);
-
-// MQTT client
+DHT dht(DHT_PIN, DHT_TYPE);
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// MQTT callback function prototype
-void mqtt_callback(char* topic, byte* payload, unsigned int length);
-
 void setup() {
-  // Initialize serial port
   Serial.begin(115200);
-
-  // Initialize DHT sensor
   dht.begin();
 
-  // Connect to WiFi network
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
 
-  // Connect to MQTT broker
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(mqtt_callback);
-// Inside the setup function where you connect to the MQTT broker
-while (!client.connected()) {
-    Serial.print("Attempting to connect to MQTT broker...");
-    // Concatenate username and password
-    String clientId = String(mqtt_user) + "-" + String(mqtt_password);
-    if (client.connect(clientId.c_str())) {
-        Serial.println("Connected");
+  client.setServer(mqttServer, mqttPort);
+  while (!client.connected()) {
+    if (client.connect("D1MiniClient", mqttUser, mqttPassword)) {
+      Serial.println("Connected to MQTT broker");
     } else {
-        Serial.println("Failed, retrying in 5 seconds");
-        delay(5000);
+      Serial.print("Failed to connect to MQTT broker, rc=");
+      Serial.print(client.state());
+      Serial.println(" Retrying in 5 seconds...");
+      delay(5000);
     }
-}
-
+  }
 }
 
 void loop() {
-  // Read temperature and humidity from DHT sensor
-  float temperature = dht.readTemperature();
+  delay(2000); // Delay for 2 seconds between readings
+
   float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature(); // in Celsius
 
-  // Publish data to MQTT broker
-  String payload = "{\"temperature\": " + String(temperature) + ", \"humidity\": " + String(humidity) + "}";
-  client.publish(mqtt_topic, payload.c_str());
+  // Read the analog value from the UV sensor
+  int uvValue = analogRead(UV_SENSOR_PIN);
 
-  // Wait 2 seconds before publishing again
-  delay(2000);
-}
+  // Convert the analog value to voltage (assuming 3.3V reference)
+  float voltage = uvValue * (3.3 / 1023.0);
 
-void mqtt_callback(char* topic, byte* payload, unsigned int length) {
-  // Do nothing
+  // Calculate UV intensity using the sensor's formula (you may need to adjust this based on calibration)
+  float uvIntensity = voltage * 15;  // Adjust the constant based on calibration data
+
+  // Format the data into a JSON message
+  String jsonMessage = "{\"temperature\":" + String(temperature) +
+                       ",\"humidity\":" + String(humidity) +
+                       ",\"uv_intensity\":" + String(uvIntensity) + "}";
+
+  // Publish the JSON message to the MQTT topic
+  if (client.publish(mqttTopic, jsonMessage.c_str())) {
+    Serial.println("Data published to MQTT");
+  } else {
+    Serial.println("Failed to publish data to MQTT");
+  }
+
+  delay(5000); // Delay for 5 seconds before the next reading
 }
