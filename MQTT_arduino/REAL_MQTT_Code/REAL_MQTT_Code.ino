@@ -2,6 +2,9 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h> // Include the ArduinoJSON library
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP280.h>
 
 #define DHT_PIN 13 // DHT22 sensor is connected to D1 Mini pin D12
 #define DHT_TYPE DHT22
@@ -22,10 +25,17 @@ const char* mqttTopic = "testtopic/chur";
 DHT dht(DHT_PIN, DHT_TYPE);
 WiFiClient espClient;
 PubSubClient client(espClient);
+Adafruit_BMP280 bmp; // Create an instance of the BMP280 sensor
 
 void setup() {
   Serial.begin(115200);
   dht.begin();
+  Wire.begin(); // Initialize I2C communication
+
+  if (!bmp.begin(0x76)) { // Use the correct BMP280 address (0x76 or 0x77)
+    Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+    while (1);
+  }
 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -62,12 +72,16 @@ void loop() {
   // Map the analog value to the UV index value using calibration data
   float uvIndex = mapFloat(uvValue, 0, 1023, 0, 11);
 
+  // Read pressure from BMP280 sensor
+  float pressure = bmp.readPressure() / 100.0; // Convert Pa to hPa
+
   // Create a JSON object
   StaticJsonDocument<200> jsonDoc;
   jsonDoc["DevId"] = "M002"; // Add UserId field
   jsonDoc["temperature"] = temperature;
   jsonDoc["humidity"] = humidity;
-  jsonDoc["uv_index"] = uvIndex;  // Use uvIndex instead of uvIntensity
+  jsonDoc["uv_index"] = uvIndex;
+  jsonDoc["pressure"] = pressure; // Add pressure field
 
   // Serialize the JSON object to a string
   String jsonMessage;
