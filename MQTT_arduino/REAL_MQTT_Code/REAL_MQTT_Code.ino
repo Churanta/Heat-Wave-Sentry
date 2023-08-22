@@ -3,7 +3,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h> // Include the ArduinoJSON library
 
-#define DHT_PIN 12 // DHT22 sensor is connected to D1 Mini pin D12
+#define DHT_PIN 13 // DHT22 sensor is connected to D1 Mini pin D12
 #define DHT_TYPE DHT22
 
 #define UV_SENSOR_PIN A0 // ML8511 sensor is connected to analog pin A0
@@ -46,6 +46,10 @@ void setup() {
   }
 }
 
+float mapFloat(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
 void loop() {
   delay(2000); // Delay for 2 seconds between readings
 
@@ -55,18 +59,15 @@ void loop() {
   // Read the analog value from the UV sensor
   int uvValue = analogRead(UV_SENSOR_PIN);
 
-  // Convert the analog value to voltage (assuming 3.3V reference)
-  float voltage = uvValue * (3.3 / 1023.0);
-
-  // Calculate UV intensity using the sensor's formula (you may need to adjust this based on calibration)
-  float uvIntensity = voltage * 15;  // Adjust the constant based on calibration data
+  // Map the analog value to the UV index value using calibration data
+  float uvIndex = mapFloat(uvValue, 0, 1023, 0, 11);
 
   // Create a JSON object
   StaticJsonDocument<200> jsonDoc;
-  jsonDoc["UserId"] = "SN001"; // Add UserId field
+  jsonDoc["DevId"] = "M002"; // Add UserId field
   jsonDoc["temperature"] = temperature;
   jsonDoc["humidity"] = humidity;
-  jsonDoc["uv_intensity"] = uvIntensity;
+  jsonDoc["uv_index"] = uvIndex;  // Use uvIndex instead of uvIntensity
 
   // Serialize the JSON object to a string
   String jsonMessage;
@@ -75,6 +76,7 @@ void loop() {
   // Publish the JSON message to the MQTT topic
   if (client.publish(mqttTopic, jsonMessage.c_str())) {
     Serial.println("Data published to MQTT");
+    Serial.println(jsonMessage);
   } else {
     Serial.println("Failed to publish data to MQTT");
   }
